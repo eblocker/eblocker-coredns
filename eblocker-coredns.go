@@ -18,10 +18,14 @@ package main
 
 import (
 	_ "github.com/coredns/coredns/plugin/bufsize"
+	_ "github.com/coredns/coredns/plugin/cache"
 	_ "github.com/coredns/coredns/plugin/debug"
 	_ "github.com/coredns/coredns/plugin/errors"
+	_ "github.com/coredns/coredns/plugin/forward"
+	_ "github.com/coredns/coredns/plugin/hosts"
 	_ "github.com/coredns/coredns/plugin/log"
 	_ "github.com/coredns/coredns/plugin/timeouts"
+	_ "github.com/coredns/coredns/plugin/view"
 
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/coremain"
@@ -33,6 +37,10 @@ var directives = []string{
 	"debug",
 	"errors",
 	"log",
+	"cache",
+	"hosts",
+	"forward",
+	"view",
 }
 
 // init sets up a minimal set of CoreDNS plugins

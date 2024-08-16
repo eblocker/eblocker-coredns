@@ -5,14 +5,19 @@ go 1.22.5
 require github.com/coredns/coredns v1.11.3
 
 require (
+	github.com/antonmedv/expr v1.15.5 // indirect
 	github.com/apparentlymart/go-cidr v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/coredns/caddy v1.1.1 // indirect
+	github.com/dnstap/golang-dnstap v0.4.0 // indirect
+	github.com/farsightsec/golang-framestream v0.3.0 // indirect
 	github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/pprof v0.0.0-20230817174616-7a8ec2ada47b // indirect
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
+	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/miekg/dns v1.1.58 // indirect
 	github.com/onsi/ginkgo/v2 v2.13.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
