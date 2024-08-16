@@ -1,0 +1,12 @@
+Source: eblocker-coredns
+Section: contrib/net
+Priority: extra
+Maintainer: eBlocker Open Source <dev@eblocker.org>
+Build-Depends: debhelper (>= 9)
+Standards-Version: 3.9.3
+Homepage: https://github.com/eblocker/eblocker-coredns
+
+Package: eblocker-coredns
+Architecture: any
+Depends: redis-server
+Description: eBlocker DNS Server

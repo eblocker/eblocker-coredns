@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if [ "$1" = remove ] ; then
+    # Stop service
+    systemctl stop eblocker-coredns
+    # Disable service
+    systemctl disable eblocker-coredns
+fi
+
+exit 0

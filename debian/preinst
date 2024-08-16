@@ -1,0 +1,5 @@
+#!/bin/sh
+
+if [ "$1" = install ] ; then
+    adduser --quiet --system --no-create-home --home /opt/eblocker-coredns --shell /usr/sbin/nologin --group eblocker-dns
+fi

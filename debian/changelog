@@ -1,0 +1,5 @@
+eblocker-coredns (1.0-0) stable; urgency=low
+
+  * Reimplementation of eblocker-dns as CoreDNS plugins
+
+ -- eBlocker Open Source <dev@eblocker.org>  Fri, 16 Aug 2024 11:00:00 +0000

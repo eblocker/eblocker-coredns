@@ -1,0 +1,17 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = configure ] ; then
+    echo configure
+
+    # Install services:
+    systemctl enable eblocker-coredns
+
+    # (Re)start services:
+    systemctl restart eblocker-coredns
+
+fi
+
+exit 0
+
