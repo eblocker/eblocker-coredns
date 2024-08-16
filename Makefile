@@ -1,7 +1,12 @@
 DNS_HOME = $(DESTDIR)/opt/eblocker-coredns
 
+all: eblocker-coredns
+
 test:
 	go test ./...
+
+clean:
+	rm eblocker-coredns
 
 eblocker-coredns:
 	go build
