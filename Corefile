@@ -1,3 +1,11 @@
-.:5300 {
+(shared_config) {
+    cache 30
+    hosts "hosts" {
+        fallthrough
+    }
     errors
+}
+.:5300 {
+    forward . 1.1.1.1 9.9.9.9
+    import shared_config
 }
