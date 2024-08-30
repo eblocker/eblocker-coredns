@@ -1,0 +1,31 @@
+(shared_config) {
+	cache 30
+	hosts "hosts-test" {
+		fallthrough
+	}
+	errors
+}
+(resolver_custom) {
+	forward . 1.1.1.1:53 9.9.9.9:53 {
+		policy round_robin
+	}
+}
+(resolver_dhcp) {
+	forward . 192.168.0.1:53 [fd00::f:b:1:2]:53 {
+		policy sequential
+	}
+}
+(resolver_tor) {
+	forward . 127.0.0.1:9053 {
+		policy sequential
+	}
+}
+(resolver_vpn-4) {
+	forward . 10.96.0.1:53 {
+		policy sequential
+	}
+}
+.:5300 {
+	import resolver_custom
+	import shared_config
+}

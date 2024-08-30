@@ -1,0 +1,115 @@
+{
+  "defaultResolver": "custom",
+  "resolverConfigs": {
+    "tor": {
+      "nameServers": [
+        {
+          "protocol": "UDP",
+          "address": "127.0.0.1",
+          "port": 9053
+        }
+      ],
+      "options": {}
+    },
+    "custom": {
+      "nameServers": [
+        {
+          "protocol": "UDP",
+          "address": "1.1.1.1",
+          "port": 53
+        },
+        {
+          "protocol": "UDP",
+          "address": "9.9.9.9",
+          "port": 53
+        }
+      ],
+      "options": {
+        "order": "round_robin"
+      }
+    },
+    "dhcp": {
+      "nameServers": [
+        {
+          "protocol": "UDP",
+          "address": "192.168.0.1",
+          "port": 53
+        },
+        {
+          "protocol": "UDP",
+          "address": "fd00::f:b:1:2",
+          "port": 53
+        }
+      ],
+      "options": {}
+    },
+    "vpn-4": {
+      "nameServers": [
+        {
+          "protocol": "UDP",
+          "address": "10.96.0.1",
+          "port": 53
+        }
+      ],
+      "options": {
+        "bind_host": "10.96.0.87"
+      }
+    }
+  },
+  "resolverConfigNameByIp": {},
+  "localDnsRecords": [
+    {
+      "name": "dnscheck.eblocker.com",
+      "builtin": true,
+      "hidden": false,
+      "ipAddress": "192.168.0.2",
+      "ip6Address": "fe80::e:b:10:c",
+      "vpnIpAddress": null,
+      "vpnIp6Address": null
+    },
+    {
+      "name": "fritz.box",
+      "builtin": false,
+      "hidden": false,
+      "ipAddress": "192.168.0.1",
+      "ip6Address": "fd00::f:b:1:2",
+      "vpnIpAddress": null,
+      "vpnIp6Address": null
+    },
+    {
+      "name": "eblocker.box",
+      "builtin": true,
+      "hidden": false,
+      "ipAddress": "192.168.0.2",
+      "ip6Address": "fe80::e:b:10:c",
+      "vpnIpAddress": null,
+      "vpnIp6Address": null
+    },
+    {
+      "name": "dnscheck.eblocker.org",
+      "builtin": true,
+      "hidden": false,
+      "ipAddress": "192.168.0.2",
+      "ip6Address": "fe80::e:b:10:c",
+      "vpnIpAddress": null,
+      "vpnIp6Address": null
+    },
+    {
+      "name": "controlbar.eblocker.org",
+      "builtin": true,
+      "hidden": true,
+      "ipAddress": "139.59.206.208",
+      "ip6Address": null,
+      "vpnIpAddress": "139.59.206.208",
+      "vpnIp6Address": null
+    }
+  ],
+  "filteredPeers": [],
+  "filteredPeersDefaultAllow": [
+    "fe80::1:2:3:4",
+    "192.168.0.4"
+  ],
+  "accessDeniedIp": null,
+  "vpnSubnetIp": "10.8.0.0",
+  "vpnSubnetNetmask": "255.255.255.0"
+}

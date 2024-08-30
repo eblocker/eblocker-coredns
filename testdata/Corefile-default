@@ -1,0 +1,16 @@
+(shared_config) {
+	cache 30
+	hosts "hosts-test" {
+		fallthrough
+	}
+	errors
+}
+(resolver_default) {
+	forward . 1.1.1.1:53 9.9.9.9:53 {
+		policy sequential
+	}
+}
+.:5300 {
+	import resolver_default
+	import shared_config
+}

@@ -27,6 +27,8 @@ import (
 	_ "github.com/coredns/coredns/plugin/timeouts"
 	_ "github.com/coredns/coredns/plugin/view"
 
+	log "github.com/coredns/coredns/plugin/pkg/log"
+
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/coremain"
 )
@@ -50,5 +52,9 @@ func init() {
 
 // main starts the CoreDNS server
 func main() {
+	updater := NewConfigUpdater()
+	if err := updater.Start(); err != nil {
+		log.Fatalf("Error starting the config updater: %v", err)
+	}
 	coremain.Run()
 }

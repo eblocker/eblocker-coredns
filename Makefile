@@ -6,16 +6,14 @@ test:
 	go test ./...
 
 clean:
-	rm eblocker-coredns
+	rm -f eblocker-coredns Corefile hosts
 
-eblocker-coredns:
+eblocker-coredns: eblocker-coredns.go configupdater.go
 	go build
 
 install: eblocker-coredns
 	mkdir -p $(DNS_HOME) $(DNS_HOME)/bin
 	cp eblocker-coredns $(DNS_HOME)/bin
-	cp Corefile $(DNS_HOME)
-	cp hosts $(DNS_HOME)
 
 package:
 	dpkg-buildpackage -us -uc -b
