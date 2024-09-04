@@ -38,9 +38,9 @@ const (
 // Domainfilter represents the plugin's configuration
 type DomainFilter struct {
 	Next           plugin.Handler
-	ServiceAddress string // usually "localhost:7777"
-	ActionOnError  string // "allow" or "deny" if filter service is not available
-	UDPAddr        *net.UDPAddr
+	ServiceAddress string       // usually "localhost:7777"
+	ActionOnError  string       // "allow" or "deny" if filter service is not available
+	UDPAddr        *net.UDPAddr // resolved service address
 }
 
 // NewDomainFilter creates a DomainFilter.
@@ -81,7 +81,7 @@ func (df *DomainFilter) ServeDNS(ctx context.Context, writer dns.ResponseWriter,
 			log.Infof("Allowing access by default")
 			isBlocked = false
 		} else {
-			log.Infof("Denying access, returning SERVFAIL")
+			log.Infof("Denying access by default, returning SERVFAIL")
 			return dns.RcodeServerFailure, nil
 		}
 	}
@@ -119,6 +119,11 @@ func (df *DomainFilter) filterDomain(clientIP, domain string) (bool, string, err
 	}
 	response := string(buffer[:n])
 	response = strings.TrimSpace(response)
+
+	// Responses are a bit counter-intuitive in the protocol:
+	// "ERR" means: domain is not blocked
+	// "OK message=..." means: domain is blocked
+	// "BH" means: the service had an error
 	if response == "ERR" {
 		return false, "", nil
 	} else if rest, found := strings.CutPrefix(response, "OK message="); found {
