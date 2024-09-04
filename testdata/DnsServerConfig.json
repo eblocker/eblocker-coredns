@@ -56,7 +56,10 @@
       }
     }
   },
-  "resolverConfigNameByIp": {},
+  "resolverConfigNameByIp": {
+    "192.168.0.5": "vpn-4",
+    "192.168.0.7": "tor"
+  },
   "localDnsRecords": [
     {
       "name": "dnscheck.eblocker.com",
@@ -104,7 +107,9 @@
       "vpnIp6Address": null
     }
   ],
-  "filteredPeers": [],
+  "filteredPeers": [
+    "192.168.0.5"
+  ],
   "filteredPeersDefaultAllow": [
     "fe80::1:2:3:4",
     "192.168.0.4"

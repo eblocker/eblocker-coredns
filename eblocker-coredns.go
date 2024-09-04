@@ -26,6 +26,7 @@ import (
 	_ "github.com/coredns/coredns/plugin/log"
 	_ "github.com/coredns/coredns/plugin/timeouts"
 	_ "github.com/coredns/coredns/plugin/view"
+	_ "github.com/eblocker/eblocker-coredns/domainfilter"
 
 	log "github.com/coredns/coredns/plugin/pkg/log"
 
@@ -41,6 +42,7 @@ var directives = []string{
 	"log",
 	"cache",
 	"hosts",
+	"domainfilter",
 	"forward",
 	"view",
 }

@@ -8,7 +8,7 @@ test:
 clean:
 	rm -f eblocker-coredns Corefile hosts
 
-eblocker-coredns: eblocker-coredns.go configupdater.go
+eblocker-coredns: eblocker-coredns.go configupdater.go domainfilter/setup.go domainfilter/domainfilter.go
 	go build
 
 install: eblocker-coredns

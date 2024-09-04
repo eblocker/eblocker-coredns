@@ -24,6 +24,7 @@ import (
 	"net/netip"
 	"os"
 	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -33,10 +34,12 @@ import (
 
 const (
 	localPort     = 5300
+	debugEnabled  = false // show debug messages?
 	cacheTTL      = 30
 	redisAddress  = "localhost:6379"
 	redisRetrySec = 15 // seconds to wait before retrying to subscribe to Redis channel
 	channelName   = "dns_config"
+	filterService = "localhost:7777" // address of Icapserver's domain filter service
 )
 
 type Database interface {
@@ -207,6 +210,7 @@ func (updater *ConfigUpdater) reloadConfig(ctx context.Context) error {
 // changed since the last call) and notifies CoreDNS via the USR1 signal.
 func (updater *ConfigUpdater) updateConfig(configJson string) error {
 	if updater.lastConfigJson == configJson {
+		log.Debugf("Not updating config because JSON has not changed")
 		return nil
 	}
 	var dnsConfig DnsServerConfig
@@ -226,10 +230,23 @@ func (updater *ConfigUpdater) updateConfig(configJson string) error {
 	updater.lastConfigJson = configJson
 	log.Info("Successfully updated config. Notifying CoreDNS...")
 
-	// Notify the DNS server to reload its config
-	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+	reloadCoreDNS()
 
 	return nil
+}
+
+func reloadCoreDNS() {
+	// Notify the DNS server to reload its config
+	if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR1); err != nil {
+		log.Errorf("Could not send CoreDNS the USR1 signal: %v", err)
+	}
+}
+
+// FilterConfig is used internally to configure the CoreDNS configurations for the view plugin
+type FilterConfig struct {
+	resolverName string
+	clientIPs    []string
+	action       string // "pass" (no filter), "deny" (filter, deny on error), "allow" (filter, allow on error)
 }
 
 // writeCorefile writes the CoreDNS configuration file.
@@ -242,6 +259,9 @@ func writeCorefile(coreFile string, hostsFile string, dnsConfig DnsServerConfig)
 	defer file.Close()
 	fmt.Fprintf(file, "(shared_config) {\n\tcache %d\n", cacheTTL)
 	fmt.Fprintf(file, "\thosts \"%s\" {\n\t\tfallthrough\n\t}\n", hostsFile)
+	if debugEnabled {
+		fmt.Fprintf(file, "\tdebug\n")
+	}
 	fmt.Fprintf(file, "\terrors\n}\n")
 	var resolverNames []string
 	for name := range dnsConfig.ResolverConfigs {
@@ -266,11 +286,81 @@ func writeCorefile(coreFile string, hostsFile string, dnsConfig DnsServerConfig)
 		fmt.Fprintf(file, " {\n\t\tpolicy %s\n", policy)
 		fmt.Fprintf(file, "\t}\n}\n")
 	}
+	filterConfigs := getFilterConfigs(resolverNames, dnsConfig)
+	for _, cfg := range filterConfigs {
+		writeDnsServer(file, cfg)
+	}
+	global := FilterConfig{
+		resolverName: dnsConfig.DefaultResolver,
+		action:       "pass",
+	}
+	writeDnsServer(file, global)
+	return nil
+}
+
+func getFilterConfigs(resolverNames []string, dnsConfig DnsServerConfig) []FilterConfig {
+	capacity := 3 * len(resolverNames)
+	cfgs := make([]FilterConfig, 0, capacity)
+	ip2action := make(map[string]string, len(dnsConfig.ResolverConfigNameByIp)+len(dnsConfig.FilteredPeers)+len(dnsConfig.FilteredPeersDefaultAllow))
+	ip2resolver := dnsConfig.ResolverConfigNameByIp
+	for _, ip := range dnsConfig.FilteredPeers {
+		ip2action[ip] = "deny"
+	}
+	for _, ip := range dnsConfig.FilteredPeersDefaultAllow {
+		ip2action[ip] = "allow"
+	}
+	for ip := range dnsConfig.ResolverConfigNameByIp {
+		if ip2action[ip] == "" {
+			ip2action[ip] = "pass"
+		}
+	}
+	// map filtered peers to the default resolver (unless mapped already)
+	for ip := range ip2action {
+		if ip2resolver[ip] == "" {
+			ip2resolver[ip] = dnsConfig.DefaultResolver
+		}
+	}
+	for _, resolver := range resolverNames {
+		for _, action := range []string{"pass", "deny", "allow"} {
+			if resolver == dnsConfig.DefaultResolver && action == "pass" {
+				// The default resolver can not have any client IPs.
+				// It is added later as the last server.
+				continue
+			}
+			// collect IPs for this combination of resolver and action:
+			clientIPs := make([]string, 0)
+			for ip, res := range ip2resolver {
+				if res == resolver && ip2action[ip] == action {
+					clientIPs = append(clientIPs, ip)
+				}
+			}
+			if len(clientIPs) > 0 {
+				slices.Sort(clientIPs) // for testability
+				cfg := FilterConfig{
+					resolverName: resolver,
+					clientIPs:    clientIPs,
+					action:       action,
+				}
+				cfgs = append(cfgs, cfg)
+			}
+		}
+	}
+	return cfgs
+}
+
+func writeDnsServer(file *os.File, cfg FilterConfig) {
 	fmt.Fprintf(file, ".:%d {\n", localPort)
-	fmt.Fprintf(file, "\timport resolver_%s\n", dnsConfig.DefaultResolver)
+	if len(cfg.clientIPs) > 0 {
+		fmt.Fprintf(file, "\tview %s_%s {\n", cfg.resolverName, cfg.action)
+		fmt.Fprintf(file, "\t\texpr client_ip() in ['%s']\n", strings.Join(cfg.clientIPs, "', '"))
+		fmt.Fprintf(file, "\t}\n")
+	}
+	if cfg.action != "pass" {
+		fmt.Fprintf(file, "\tdomainfilter %s %s\n", filterService, cfg.action)
+	}
+	fmt.Fprintf(file, "\timport resolver_%s\n", cfg.resolverName)
 	fmt.Fprintf(file, "\timport shared_config\n")
 	fmt.Fprintf(file, "}\n")
-	return nil
 }
 
 // writeHostsFile writes the local DNS records to a file that can be read by the "hosts" plugin.
@@ -312,7 +402,8 @@ func writeHostsFile(hostsFile string, records []LocalDnsRecord) error {
 }
 
 func (updater *ConfigUpdater) flushCache() {
-	log.Warning("Flushing the cache not implemented yet")
+	log.Infof("Flushing the cache by reloading CoreDNS")
+	reloadCoreDNS()
 }
 
 // Query implements interface Database.
@@ -336,7 +427,7 @@ func (rdb *RedisDatabase) Subscribe(ctx context.Context, channelName string) (<-
 		for {
 			// convert every incoming redis.Message to a string (the payload)
 			msg := <-ch
-			log.Info("Converting redis Message")
+			log.Debugf("Converting redis Message")
 			result <- msg.Payload
 		}
 	}()

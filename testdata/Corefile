@@ -26,6 +26,29 @@
 	}
 }
 .:5300 {
+	view custom_allow {
+		expr client_ip() in ['192.168.0.4', 'fe80::1:2:3:4']
+	}
+	domainfilter localhost:7777 allow
+	import resolver_custom
+	import shared_config
+}
+.:5300 {
+	view tor_pass {
+		expr client_ip() in ['192.168.0.7']
+	}
+	import resolver_tor
+	import shared_config
+}
+.:5300 {
+	view vpn-4_deny {
+		expr client_ip() in ['192.168.0.5']
+	}
+	domainfilter localhost:7777 deny
+	import resolver_vpn-4
+	import shared_config
+}
+.:5300 {
 	import resolver_custom
 	import shared_config
 }

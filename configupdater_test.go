@@ -260,7 +260,6 @@ func TestUpdateConfig(t *testing.T) {
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGUSR1)
-	md.channel <- "flush" // produces only a warning
 	md.channel <- "update"
 	close(md.channel)
 	// wait for the USR1 signal that the updater sends to the process
