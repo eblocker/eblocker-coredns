@@ -24,9 +24,12 @@ import (
 	_ "github.com/coredns/coredns/plugin/forward"
 	_ "github.com/coredns/coredns/plugin/hosts"
 	_ "github.com/coredns/coredns/plugin/log"
+	_ "github.com/coredns/coredns/plugin/metadata"
 	_ "github.com/coredns/coredns/plugin/timeouts"
 	_ "github.com/coredns/coredns/plugin/view"
 	_ "github.com/eblocker/eblocker-coredns/domainfilter"
+	_ "github.com/eblocker/eblocker-coredns/filterstats"
+	_ "github.com/eblocker/eblocker-coredns/resolverstats"
 
 	log "github.com/coredns/coredns/plugin/pkg/log"
 
@@ -35,6 +38,7 @@ import (
 )
 
 var directives = []string{
+	"metadata",
 	"timeouts",
 	"bufsize",
 	"debug",
@@ -42,7 +46,9 @@ var directives = []string{
 	"log",
 	"cache",
 	"hosts",
+	"filterstats",
 	"domainfilter",
+	"resolverstats",
 	"forward",
 	"view",
 }

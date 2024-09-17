@@ -33,13 +33,15 @@ import (
 )
 
 const (
-	localPort     = 5300
-	debugEnabled  = false // show debug messages?
-	cacheTTL      = 30
-	redisAddress  = "localhost:6379"
-	redisRetrySec = 15 // seconds to wait before retrying to subscribe to Redis channel
-	channelName   = "dns_config"
-	filterService = "localhost:7777" // address of Icapserver's domain filter service
+	localPort           = 5300
+	debugEnabled        = false // show debug messages?
+	cacheTTL            = 30
+	redisAddress        = "localhost:6379"
+	redisRetrySec       = 15 // seconds to wait before retrying to subscribe to Redis channel
+	channelName         = "dns_config"
+	filterService       = "localhost:7777" // address of Icapserver's domain filter service
+	optionResolverStats = "stats"
+	omitResolverStats   = "omit"
 )
 
 type Database interface {
@@ -154,7 +156,10 @@ func getDefaultConfig() DnsServerConfig {
 					{"UDP", netip.AddrFrom4([4]byte{1, 1, 1, 1}), 53},
 					{"UDP", netip.AddrFrom4([4]byte{9, 9, 9, 9}), 53},
 				},
-				map[string]string{},
+				map[string]string{
+					// Don't collect resolver stats because Redis is probably down:
+					optionResolverStats: omitResolverStats,
+				},
 			},
 		},
 	}
@@ -260,9 +265,12 @@ func writeCorefile(coreFile string, hostsFile string, dnsConfig DnsServerConfig)
 	fmt.Fprintf(file, "(shared_config) {\n\tcache %d\n", cacheTTL)
 	fmt.Fprintf(file, "\thosts \"%s\" {\n\t\tfallthrough\n\t}\n", hostsFile)
 	if debugEnabled {
+		fmt.Fprintf(file, "\tlog\n")
 		fmt.Fprintf(file, "\tdebug\n")
 	}
-	fmt.Fprintf(file, "\terrors\n}\n")
+	fmt.Fprintf(file, "\terrors\n")
+	fmt.Fprintf(file, "\tmetadata\n")
+	fmt.Fprintf(file, "}\n")
 	var resolverNames []string
 	for name := range dnsConfig.ResolverConfigs {
 		resolverNames = append(resolverNames, name)
@@ -283,8 +291,12 @@ func writeCorefile(coreFile string, hostsFile string, dnsConfig DnsServerConfig)
 		default:
 			policy = "sequential"
 		}
-		fmt.Fprintf(file, " {\n\t\tpolicy %s\n", policy)
-		fmt.Fprintf(file, "\t}\n}\n")
+		fmt.Fprintf(file, " {\n")
+		fmt.Fprintf(file, "\t\tpolicy %s\n\t}\n", policy)
+		if resolver.Options[optionResolverStats] != omitResolverStats {
+			fmt.Fprintf(file, "\tresolverstats %s\n", name)
+		}
+		fmt.Fprintf(file, "}\n")
 	}
 	filterConfigs := getFilterConfigs(resolverNames, dnsConfig)
 	for _, cfg := range filterConfigs {
@@ -357,6 +369,7 @@ func writeDnsServer(file *os.File, cfg FilterConfig) {
 	}
 	if cfg.action != "pass" {
 		fmt.Fprintf(file, "\tdomainfilter %s %s\n", filterService, cfg.action)
+		fmt.Fprintf(file, "\tfilterstats\n")
 	}
 	fmt.Fprintf(file, "\timport resolver_%s\n", cfg.resolverName)
 	fmt.Fprintf(file, "\timport shared_config\n")

@@ -4,32 +4,38 @@
 		fallthrough
 	}
 	errors
+	metadata
 }
 (resolver_custom) {
 	forward . 1.1.1.1:53 9.9.9.9:53 {
 		policy round_robin
 	}
+	resolverstats custom
 }
 (resolver_dhcp) {
 	forward . 192.168.0.1:53 [fd00::f:b:1:2]:53 {
 		policy sequential
 	}
+	resolverstats dhcp
 }
 (resolver_tor) {
 	forward . 127.0.0.1:9053 {
 		policy sequential
 	}
+	resolverstats tor
 }
 (resolver_vpn-4) {
 	forward . 10.96.0.1:53 {
 		policy sequential
 	}
+	resolverstats vpn-4
 }
 .:5300 {
 	view custom_allow {
 		expr client_ip() in ['192.168.0.4', 'fe80::1:2:3:4']
 	}
 	domainfilter localhost:7777 allow
+	filterstats
 	import resolver_custom
 	import shared_config
 }
@@ -45,6 +51,7 @@
 		expr client_ip() in ['192.168.0.5']
 	}
 	domainfilter localhost:7777 deny
+	filterstats
 	import resolver_vpn-4
 	import shared_config
 }

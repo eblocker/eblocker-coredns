@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/plugin/metadata"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/request"
 	"github.com/miekg/dns"
@@ -35,12 +36,19 @@ const (
 	defaultAccessDeniedIP = "169.254.93.109"
 )
 
-// Domainfilter represents the plugin's configuration
+// Domainfilter represents the plugin's configuration.
 type DomainFilter struct {
 	Next           plugin.Handler
 	ServiceAddress string       // usually "localhost:7777"
 	ActionOnError  string       // "allow" or "deny" if filter service is not available
 	UDPAddr        *net.UDPAddr // resolved service address
+}
+
+// FilterResult represents the answer returned by the domain filter service.
+type FilterResult struct {
+	isBlocked      bool
+	accessDeniedIP string // IP to return to the client
+	listID         string // ID of the list responsible for blocking this domain
 }
 
 // NewDomainFilter creates a DomainFilter.
@@ -74,20 +82,28 @@ func (df *DomainFilter) ServeDNS(ctx context.Context, writer dns.ResponseWriter,
 	state := request.Request{W: writer, Req: req}
 	domain := strings.TrimSuffix(state.Name(), ".")
 	log.Debugf("Domain '%s' requested by %s", domain, state.IP())
-	isBlocked, targetIP, err := df.filterDomain(state.IP(), domain)
+	result, err := df.filterDomain(state.IP(), domain)
 	if err != nil {
 		log.Errorf("Could not filter domain: %v", err)
 		if df.ActionOnError == "allow" {
 			log.Infof("Allowing access by default")
-			isBlocked = false
+			result.isBlocked = false
 		} else {
 			log.Infof("Denying access by default, returning SERVFAIL")
 			return dns.RcodeServerFailure, nil
 		}
 	}
-	if isBlocked {
-		resp := blockingResponse(state, targetIP)
+	if result.isBlocked {
+		resp := blockingResponse(state, result.accessDeniedIP)
 		writer.WriteMsg(resp)
+
+		// add metadata (used by filterstats plugin)
+		if result.listID != "" {
+			metadata.SetValueFunc(ctx, "domainfilter/blockedbylist", func() string {
+				return result.listID
+			})
+		}
+
 		return dns.RcodeSuccess, nil
 	}
 	return plugin.NextOrFailure(df.Name(), df.Next, ctx, writer, req)
@@ -96,11 +112,11 @@ func (df *DomainFilter) ServeDNS(ctx context.Context, writer dns.ResponseWriter,
 // filterDomain accesses the Icapserver's domain filter API.
 // Messages are defined by the Squid ACL helper API:
 // https://wiki.squid-cache.org/Features/AddonHelpers
-func (df *DomainFilter) filterDomain(clientIP, domain string) (bool, string, error) {
+func (df *DomainFilter) filterDomain(clientIP, domain string) (FilterResult, error) {
 	// Create a UDP socket
 	conn, err := net.DialUDP("udp", nil, df.UDPAddr)
 	if err != nil {
-		return false, "", fmt.Errorf("could not connect to filter service: %w", err)
+		return FilterResult{}, fmt.Errorf("could not connect to filter service: %w", err)
 	}
 	defer conn.Close()
 
@@ -108,14 +124,14 @@ func (df *DomainFilter) filterDomain(clientIP, domain string) (bool, string, err
 	sendData := fmt.Sprintf("%s dns %s -\n", clientIP, domain)
 	_, err = conn.Write([]byte(sendData))
 	if err != nil {
-		return false, "", fmt.Errorf("could not send to filter service: %w", err)
+		return FilterResult{}, fmt.Errorf("could not send to filter service: %w", err)
 	}
 
 	// Receive response
 	buffer := make([]byte, 1024)
 	n, _, err := conn.ReadFromUDP(buffer)
 	if err != nil {
-		return false, "", fmt.Errorf("could not read from filter service: %w", err)
+		return FilterResult{}, fmt.Errorf("could not read from filter service: %w", err)
 	}
 	response := string(buffer[:n])
 	response = strings.TrimSpace(response)
@@ -125,19 +141,26 @@ func (df *DomainFilter) filterDomain(clientIP, domain string) (bool, string, err
 	// "OK message=..." means: domain is blocked
 	// "BH" means: the service had an error
 	if response == "ERR" {
-		return false, "", nil
+		return FilterResult{}, nil
 	} else if rest, found := strings.CutPrefix(response, "OK message="); found {
 		parts := strings.Split(rest, ",")
 		if len(parts) >= 5 {
-			return true, parts[4], nil
+			return FilterResult{
+				isBlocked:      true,
+				accessDeniedIP: parts[4],
+				listID:         parts[1],
+			}, nil
 		} else {
 			log.Warningf("OK message from domain filter has too few elements. Using default access denied IP")
-			return true, defaultAccessDeniedIP, nil
+			return FilterResult{
+				isBlocked:      true,
+				accessDeniedIP: defaultAccessDeniedIP,
+			}, nil
 		}
 	} else if response == "BH" {
-		return false, "", fmt.Errorf("could not get response from filter service: service failed")
+		return FilterResult{}, fmt.Errorf("could not get response from filter service: service failed")
 	} else {
-		return false, "", fmt.Errorf("got unexpected response from filter service: %s", response)
+		return FilterResult{}, fmt.Errorf("got unexpected response from filter service: %s", response)
 	}
 
 }
