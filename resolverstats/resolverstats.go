@@ -82,7 +82,7 @@ type BackgroundLogger struct {
 	db           Database
 }
 
-// Database receives counts of keys in a map.
+// Database receives events in a slice. The events are to be stored in a Redis list under the given key.
 type Database interface {
 	append(ctx context.Context, key string, events []string)
 }
