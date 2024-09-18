@@ -140,7 +140,7 @@ func (counter *BackgroundCounter) stop() {
 // start runs the BackgroundCounter. Counts are collected in a map and
 // written periodically to the database.
 func (counter *BackgroundCounter) start(ctx context.Context) {
-	log.Infof("Starting counter")
+	log.Debugf("Starting counter")
 	counts := make(map[string]int)
 	tick := time.NewTicker(writeInterval * time.Second)
 	defer tick.Stop()
@@ -157,7 +157,7 @@ func (counter *BackgroundCounter) start(ctx context.Context) {
 			if len(counts) > 0 {
 				counter.db.incrBy(ctx, counts)
 			}
-			log.Infof("Stopping counter")
+			log.Debugf("Stopping counter")
 			return
 		}
 	}
