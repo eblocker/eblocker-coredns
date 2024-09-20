@@ -75,7 +75,7 @@ func (df *DomainFilter) ServeDNS(ctx context.Context, writer dns.ResponseWriter,
 			log.Errorf("Could not resolve domain filter service address %s: %v", df.ServiceAddress, err)
 			return dns.RcodeServerFailure, nil
 		}
-		log.Infof("Resolved domain filter service to %v", udpAddr)
+		log.Debugf("Resolved domain filter service to %v", udpAddr)
 		df.UDPAddr = udpAddr
 	}
 
