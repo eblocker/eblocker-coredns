@@ -44,10 +44,10 @@ var directives = []string{
 	"debug",
 	"errors",
 	"log",
-	"cache",
 	"hosts",
 	"filterstats",
-	"domainfilter",
+	"domainfilter", // results depend on the client => may not be cached
+	"cache",
 	"resolverstats",
 	"forward",
 	"view",
