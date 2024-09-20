@@ -15,14 +15,21 @@ client.
 If the domain is not blocked, the request is passed to the next plugin
 in the chain.
 
+It the ICAP server's domain filter returns an error, the blocking
+behaviour depends on the configured default action:
+
+* `allow` passes the request to the next plugin
+* `deny` returns the default access denied IP `169.254.93.109`.
+
 ## Syntax
 
 ~~~
-domainfilter HOST:PORT
+domainfilter HOST:PORT DEFAULT_ACTION
 ~~~
 
 * **HOST** the address of the ICAP server's domain filter. Usually this is `localhost`.
 * **PORT** the UDP port to connect to. Usually this is 7777.
+* **DEFAULT_ACTION** the action to take in case of an error: `allow` or `deny`.
 
 ## Examples
 
@@ -30,13 +37,15 @@ Send domain filter requests to UDP port 7777 at localhost:
 
 ~~~ corefile
 . {
-    domainfilter localhost:7777
+    domainfilter localhost:7777 allow
 }
 ~~~
 
+Allow a domain in case of an error.
+
 ## Metadata
 
-The forward plugin will publish the following metadata, if the *metadata*
+The plugin will publish the following metadata, if the *metadata*
 plugin is also enabled:
 
 * `domainfilter/blockedbylist`: the domain in the query was blocked by the given list
