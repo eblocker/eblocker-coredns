@@ -381,7 +381,7 @@ func writeHostsFile(hostsFile string, records []LocalDnsRecord) error {
 	// Map IPs to (multiple) names
 	var ip2names = make(map[string]map[string]bool)
 	for _, record := range records {
-		ips := []netip.Addr{record.IpAddress, record.Ip6Address, record.VpnIpAddress, record.VpnIp6Address}
+		ips := []netip.Addr{record.IpAddress, record.Ip6Address}
 		for _, ip := range ips {
 			if ip.IsValid() {
 				ipStr := ip.String()

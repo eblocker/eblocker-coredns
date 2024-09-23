@@ -187,9 +187,9 @@ func TestWriteHostsFile(t *testing.T) {
 			},
 			[]hostsEntry{
 				{"1.2.3.4", []string{"my.host"}},
-				{"10.8.0.7", []string{"my.host"}},
+				//{"10.8.0.7", []string{"my.host"}}, // ignored for now
 				{"fe80::1234", []string{"my.host"}},
-				{"fe80::1807", []string{"my.host"}},
+				//{"fe80::1807", []string{"my.host"}}, // ignored for now
 			},
 		},
 	}
