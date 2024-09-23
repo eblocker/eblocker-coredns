@@ -9,8 +9,8 @@
 The *domainfilter* plugin asks eBlocker's ICAP server whether a given
 domain is blocked for a specific client. The client's IP address is
 transmitted to the server. If the domain is blocked, the server
-returns the ID of the blocking list and the IP to return to the
-client.
+returns the ID of the blocking list and the IPv4 address to return to
+the client.
 
 If the domain is not blocked, the request is passed to the next plugin
 in the chain.
@@ -20,6 +20,9 @@ behaviour depends on the configured default action:
 
 * `allow` passes the request to the next plugin
 * `deny` returns the default access denied IP `169.254.93.109`.
+
+If a domain is blocked and the requested type is *not* `A` (for
+example `AAAA`), an empty response is returned.
 
 ## Syntax
 

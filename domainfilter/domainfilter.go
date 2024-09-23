@@ -167,7 +167,7 @@ func (df *DomainFilter) filterDomain(clientIP, domain string) (FilterResult, err
 
 // blockingResponse creates a response for a blocked domain.
 // Type A requests are answered with the given targetIP,
-// all other requests are answered with NXDOMAIN.
+// all other requests are answered with an empty answer section.
 func blockingResponse(state request.Request, targetIP string) *dns.Msg {
 	resp := new(dns.Msg)
 	resp.Authoritative = true
@@ -177,8 +177,6 @@ func blockingResponse(state request.Request, targetIP string) *dns.Msg {
 		a.A = net.ParseIP(targetIP)
 		a.Hdr = dns.RR_Header{Name: state.QName(), Rrtype: dns.TypeA, Class: state.QClass(), Ttl: blockTTL}
 		resp.Answer = []dns.RR{a}
-	} else {
-		resp.SetRcode(state.Req, dns.RcodeNameError)
 	}
 	return resp
 }

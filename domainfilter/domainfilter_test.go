@@ -96,15 +96,15 @@ func TestServeDNS(t *testing.T) {
 		expectedRcode         int
 		expectedError         error
 		expectedMsgRcode      int // -1 means: no response DNS message expected
-		expectedMsgIP         net.IP
+		expectedMsgIPs        []net.IP
 	}{
 		// Domain passes:
 		{"deny", domain, dns.TypeA, "ERR\n", true, filterRequest, dns.RcodeSuccess, nil, -1, nil},
 		{"deny", domain, dns.TypeAAAA, "ERR\n", true, filterRequest, dns.RcodeSuccess, nil, -1, nil},
 
 		// Domain is blocked:
-		{"deny", domain, dns.TypeA, "OK message=,,,,1.2.3.4\n", false, filterRequest, dns.RcodeSuccess, nil, dns.RcodeSuccess, net.ParseIP("1.2.3.4")},
-		{"deny", domain, dns.TypeAAAA, "OK message=,,,,1.2.3.4\n", false, filterRequest, dns.RcodeSuccess, nil, dns.RcodeNameError, nil},
+		{"deny", domain, dns.TypeA, "OK message=,,,,1.2.3.4\n", false, filterRequest, dns.RcodeSuccess, nil, dns.RcodeSuccess, []net.IP{net.ParseIP("1.2.3.4")}},
+		{"deny", domain, dns.TypeAAAA, "OK message=,,,,1.2.3.4\n", false, filterRequest, dns.RcodeSuccess, nil, dns.RcodeSuccess, []net.IP{}},
 
 		// Filter service error, denied by default:
 		{"deny", domain, dns.TypeA, "BH\n", false, filterRequest, dns.RcodeServerFailure, nil, -1, nil},
@@ -138,14 +138,16 @@ func TestServeDNS(t *testing.T) {
 			if tt.expectedMsgRcode != -1 && tt.expectedMsgRcode != rec.Msg.Rcode {
 				t.Errorf("Expected DNS response message with code %d, but got: %d", tt.expectedMsgRcode, rec.Msg.Rcode)
 			}
-			if tt.expectedMsgIP != nil {
+			if tt.expectedMsgIPs != nil {
 				rr := rec.Msg.Answer
-				if len(rr) != 1 {
-					t.Fatalf("Expected one answer in response message but got %d", len(rr))
+				if len(rr) != len(tt.expectedMsgIPs) {
+					t.Fatalf("Expected %d answers in response message but got %d", len(tt.expectedMsgIPs), len(rr))
 				}
-				gotIP := rr[0].(*dns.A).A
-				if !gotIP.Equal(tt.expectedMsgIP) {
-					t.Errorf("Expected IP %v but got %v", tt.expectedMsgIP, gotIP)
+				for i, expectedIP := range tt.expectedMsgIPs {
+					gotIP := rr[i].(*dns.A).A
+					if !gotIP.Equal(expectedIP) {
+						t.Errorf("Expected IP %v but got %v", expectedIP, gotIP)
+					}
 				}
 			}
 		})
