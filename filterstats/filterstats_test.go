@@ -133,7 +133,6 @@ func TestBackgroundCounter(t *testing.T) {
 	}
 	counter := BackgroundCounter{
 		incrChannel: make(chan string, bufferSize),
-		stopChannel: make(chan struct{}),
 		db:          &mockDB,
 	}
 	go counter.start(context.Background())

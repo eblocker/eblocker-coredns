@@ -57,7 +57,6 @@ type Counter interface {
 // Closing the stopChannel stops the background process.
 type BackgroundCounter struct {
 	incrChannel chan string
-	stopChannel chan struct{}
 	db          Database
 }
 
@@ -77,7 +76,6 @@ func NewFilterStats(next plugin.Handler) *FilterStats {
 		Next: next,
 		counter: &BackgroundCounter{
 			incrChannel: make(chan string, bufferSize),
-			stopChannel: make(chan struct{}),
 			db: &RedisDatabase{
 				client: *redis.NewClient(&redis.Options{
 					Addr: redisAddress,
@@ -134,7 +132,7 @@ func (counter *BackgroundCounter) increment(key string) {
 
 // stop stops the BackgroundCounter
 func (counter *BackgroundCounter) stop() {
-	close(counter.stopChannel)
+	close(counter.incrChannel)
 }
 
 // start runs the BackgroundCounter. Counts are collected in a map and
@@ -146,19 +144,22 @@ func (counter *BackgroundCounter) start(ctx context.Context) {
 	defer tick.Stop()
 	for {
 		select {
-		case key := <-counter.incrChannel:
-			counts[key] += 1
+		case key, more := <-counter.incrChannel:
+			if more {
+				counts[key] += 1
+			} else {
+				// channel was closed
+				if len(counts) > 0 {
+					counter.db.incrBy(ctx, counts)
+				}
+				log.Debugf("Stopping counter")
+				return
+			}
 		case <-tick.C:
 			if len(counts) > 0 {
 				counter.db.incrBy(ctx, counts)
 				clear(counts)
 			}
-		case <-counter.stopChannel:
-			if len(counts) > 0 {
-				counter.db.incrBy(ctx, counts)
-			}
-			log.Debugf("Stopping counter")
-			return
 		}
 	}
 }

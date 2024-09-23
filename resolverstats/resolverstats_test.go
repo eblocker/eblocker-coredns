@@ -124,3 +124,40 @@ func TestServeDNS(t *testing.T) {
 		lastTimestamp = timestamp
 	}
 }
+
+// MockDB replaces the Redis database.
+type MockDB struct {
+	events []string
+}
+
+// append implements Database.
+func (mdb *MockDB) append(ctx context.Context, key string, events []string) {
+	mdb.events = append(mdb.events, events...)
+}
+
+// TestBackgroundCounter tests the BackgroundLogger.
+func TestBackgroundLogger(t *testing.T) {
+	bufferSize := 500
+	mockDB := MockDB{}
+	logger := BackgroundLogger{
+		eventChannel: make(chan string, bufferSize),
+		db:           &mockDB,
+	}
+	go logger.start(context.Background())
+	for i := 0; i < 1000; i++ {
+		event := fmt.Sprintf("event%d", i)
+		logger.append(event)
+		time.Sleep(100 * time.Microsecond) // Allow the background goroutine to read the append channel
+	}
+	logger.stop()
+	time.Sleep(100 * time.Microsecond) // Allow the background goroutine to put events in the DB
+	if len(mockDB.events) != 1000 {
+		t.Errorf("Expected 1000 events, but got: %d", len(mockDB.events))
+	}
+	for i, event := range mockDB.events {
+		expected := fmt.Sprintf("event%d", i)
+		if event != expected {
+			t.Fatalf("Expected %s but got %s", expected, event)
+		}
+	}
+}

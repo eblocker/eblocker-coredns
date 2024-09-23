@@ -52,7 +52,6 @@ func NewResolverStats(next plugin.Handler, resolverName string) *ResolverStats {
 		Next: next,
 		eventLogger: &BackgroundLogger{
 			eventChannel: make(chan string, bufferSize),
-			stopChannel:  make(chan struct{}),
 			dbKey:        "dns_stats:" + resolverName,
 			db: &RedisDatabase{
 				client: *redis.NewClient(&redis.Options{
@@ -77,7 +76,6 @@ type EventLogger interface {
 // Closing the stopChannel stops the background process.
 type BackgroundLogger struct {
 	eventChannel chan string
-	stopChannel  chan struct{}
 	dbKey        string
 	db           Database
 }
@@ -132,7 +130,7 @@ func (bglog *BackgroundLogger) append(event string) {
 
 // stop stops the BackgroundLogger
 func (bglog *BackgroundLogger) stop() {
-	close(bglog.stopChannel)
+	close(bglog.eventChannel)
 }
 
 // start runs the BackgroundLogger. Events are collected in a slice and
@@ -145,19 +143,21 @@ func (bglog *BackgroundLogger) start(ctx context.Context) {
 	defer tick.Stop()
 	for {
 		select {
-		case event := <-bglog.eventChannel:
-			events = append(events, event)
+		case event, more := <-bglog.eventChannel:
+			if more {
+				events = append(events, event)
+			} else { // channel was closed
+				if len(events) > 0 {
+					bglog.db.append(ctx, bglog.dbKey, events)
+				}
+				log.Debugf("Stopping event logger")
+				return
+			}
 		case <-tick.C:
 			if len(events) > 0 {
 				bglog.db.append(ctx, bglog.dbKey, events)
 				events = newSlice()
 			}
-		case <-bglog.stopChannel:
-			if len(events) > 0 {
-				bglog.db.append(ctx, bglog.dbKey, events)
-			}
-			log.Debugf("Stopping event logger")
-			return
 		}
 	}
 }
