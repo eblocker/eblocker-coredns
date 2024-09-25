@@ -364,7 +364,8 @@ func writeDnsServer(file *os.File, cfg FilterConfig) {
 	fmt.Fprintf(file, ".:%d {\n", localPort)
 	if len(cfg.clientIPs) > 0 {
 		fmt.Fprintf(file, "\tview %s_%s {\n", cfg.resolverName, cfg.action)
-		fmt.Fprintf(file, "\t\texpr client_ip() in ['%s']\n", strings.Join(cfg.clientIPs, "', '"))
+		clientIP := "split(client_ip(), '%')[0]" // remove %eth0 from link-local IPv6 addresses
+		fmt.Fprintf(file, "\t\texpr %s in ['%s']\n", clientIP, strings.Join(cfg.clientIPs, "', '"))
 		fmt.Fprintf(file, "\t}\n")
 	}
 	if cfg.action != "pass" {

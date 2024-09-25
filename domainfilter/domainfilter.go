@@ -113,6 +113,9 @@ func (df *DomainFilter) ServeDNS(ctx context.Context, writer dns.ResponseWriter,
 // Messages are defined by the Squid ACL helper API:
 // https://wiki.squid-cache.org/Features/AddonHelpers
 func (df *DomainFilter) filterDomain(clientIP, domain string) (FilterResult, error) {
+	// Remove %eth0 from link-local IPv6 addresses
+	clientIP = strings.Split(clientIP, "%")[0]
+
 	// Create a UDP socket
 	conn, err := net.DialUDP("udp", nil, df.UDPAddr)
 	if err != nil {

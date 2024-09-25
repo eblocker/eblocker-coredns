@@ -169,3 +169,35 @@ func TestServeDNS(t *testing.T) {
 		})
 	}
 }
+
+// ResponseWriter6LinkLocal is a test response writer that has a remote IPv6 address with a zone.
+type ResponseWriter6LinkLocal struct {
+	test.ResponseWriter6
+}
+
+// RemoteAddr returns the remote address, always fe80::42:ff:feca:4c65 UDP port 40212 in zone eth0.
+func (t *ResponseWriter6LinkLocal) RemoteAddr() net.Addr {
+	return &net.UDPAddr{IP: net.ParseIP("fe80::42:ff:feca:4c65"), Port: 40212, Zone: "eth0"}
+}
+
+// TestLinkLocalIPv6 tests whether IPv6 link-local addresses are sent without the zone (e.g. "%eth0")
+// to the domain filter service.
+func TestLinkLocalIPv6(t *testing.T) {
+	ctx := context.Background()
+	domain := "example.org"
+	expectedFilterRequest := "fe80::42:ff:feca:4c65 dns example.org -\n" // note that the zone eth0 is not included here
+	filterResponse := "ERR\n"                                            // means: do not block
+	serverAddr := startMockFilterServer(expectedFilterRequest, filterResponse)
+	mockNext := &MockNext{}
+	df := NewDomainFilter(mockNext, serverAddr, "deny")
+	r := new(dns.Msg)
+	r.SetQuestion(domain, dns.TypeA)
+	rec := dnstest.NewRecorder(&ResponseWriter6LinkLocal{})
+	rcode, err := df.ServeDNS(ctx, rec, r)
+	if rcode != dns.RcodeSuccess {
+		t.Errorf("Expected return code %d but got %d", dns.RcodeSuccess, rcode)
+	}
+	if err != nil {
+		t.Errorf("ServerDNS() returned unexpected error: %v", err)
+	}
+}
