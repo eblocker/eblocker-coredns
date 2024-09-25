@@ -10,3 +10,6 @@ Package: eblocker-coredns
 Architecture: any
 Depends: redis-server
 Description: eBlocker DNS Server
+Provides: eblocker-dns
+Replaces: eblocker-dns
+Conflicts: eblocker-dns
