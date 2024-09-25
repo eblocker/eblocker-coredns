@@ -129,6 +129,15 @@ func (updater *ConfigUpdater) Start() error {
 	return nil
 }
 
+// logCurrentWorkingDirectory gives more information in case writing the Corefile failed.
+func logCurrentWorkingDirectory() {
+	if workingDir, err := os.Getwd(); err != nil {
+		log.Errorf("Could not get current working directory: %v", err)
+	} else {
+		log.Errorf("Current working directory: %s", workingDir)
+	}
+}
+
 // regularFileExists returns true if the file exists and is not a directory.
 func regularFileExists(filename string) bool {
 	info, err := os.Stat(filename)
@@ -258,7 +267,8 @@ type FilterConfig struct {
 func writeCorefile(coreFile string, hostsFile string, dnsConfig DnsServerConfig) error {
 	file, err := os.OpenFile(coreFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		log.Errorf("Error opening file: %v", err)
+		log.Errorf("Error opening file %s for writing: %v", coreFile, err)
+		logCurrentWorkingDirectory()
 		return err
 	}
 	defer file.Close()
@@ -397,7 +407,8 @@ func writeHostsFile(hostsFile string, records []LocalDnsRecord) error {
 	// Write hosts file
 	file, err := os.OpenFile(hostsFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		log.Errorf("Error opening file: %v", err)
+		log.Errorf("Error opening file %s for writing: %v", hostsFile, err)
+		logCurrentWorkingDirectory()
 		return err
 	}
 	defer file.Close()
