@@ -1,3 +1,9 @@
+eblocker-coredns (0.9-2) stable; urgency=low
+
+  * Fix issue [#4]: count link-local IPv6 addresses without zone (e.g. "%eth0").
+
+ -- eBlocker Open Source <dev@eblocker.org>  Wed, 25 Sep 2024 15:32:00 +0200
+
 eblocker-coredns (0.9-1) stable; urgency=low
 
   * Reimplementation of eblocker-dns as CoreDNS plugins

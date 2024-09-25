@@ -116,6 +116,7 @@ func (stats *FilterStats) ServeDNS(ctx context.Context, writer dns.ResponseWrite
 // Colons in IPv6 addresses are replaced with underscores.
 // See also ICAP server class JedisFilterStatisticsDataSource.
 func (stats *FilterStats) getKeyPrefix(clientIP string) string {
+	clientIP = strings.Split(clientIP, "%")[0]
 	return fmt.Sprintf("dns_stats:%s:%s", stats.timeStamper(), strings.ReplaceAll(clientIP, ":", "_"))
 }
 

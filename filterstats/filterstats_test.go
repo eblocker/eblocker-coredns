@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"net"
 	"testing"
 	"time"
 
@@ -74,21 +75,8 @@ func (mc *MockCounter) stop() {
 
 // TestServeDNS tests method ServeDNS().
 func TestServeDNS(t *testing.T) {
-	mockDomainFilter := MockDomainFilter{
-		blockListID: map[string]int{
-			"eviltracker.com": 42,
-		},
-	}
-	mockCounter := MockCounter{
-		counts: make(map[string]int),
-	}
-	fs := FilterStats{
-		Next:    &mockDomainFilter,
-		counter: &mockCounter,
-		timeStamper: func() string {
-			return "YYYYMMDDhhmm"
-		},
-	}
+	mockCounter, fs := createMocks()
+
 	// Serve a few DNS queries:
 	testdomains := []string{"eviltracker.com", "example.org", "example.com"}
 	for _, domain := range testdomains {
@@ -107,6 +95,64 @@ func TestServeDNS(t *testing.T) {
 		"dns_stats:YYYYMMDDhhmm:10.240.0.1:queries":            3,
 		"stats_total:dns:blocked_queries:42":                   1,
 		"stats_total:dns:queries":                              3,
+	}
+	if !maps.Equal(mockCounter.counts, expected) {
+		t.Errorf("Expected counts:\n%v, but got:\n%v", expected, mockCounter.counts)
+	}
+}
+
+func createMocks() (MockCounter, FilterStats) {
+	mockDomainFilter := MockDomainFilter{
+		blockListID: map[string]int{
+			"eviltracker.com": 42,
+		},
+	}
+	mockCounter := MockCounter{
+		counts: make(map[string]int),
+	}
+	fs := FilterStats{
+		Next:    &mockDomainFilter,
+		counter: &mockCounter,
+		timeStamper: func() string {
+			return "YYYYMMDDhhmm"
+		},
+	}
+	return mockCounter, fs
+}
+
+// ResponseWriter6LinkLocal is a test response writer that has a remote IPv6 address with a zone.
+type ResponseWriter6LinkLocal struct {
+	test.ResponseWriter6
+}
+
+// RemoteAddr returns the remote address, always fe80::42:ff:feca:4c65 UDP port 40212 in zone eth0.
+func (t *ResponseWriter6LinkLocal) RemoteAddr() net.Addr {
+	return &net.UDPAddr{IP: net.ParseIP("fe80::42:ff:feca:4c65"), Port: 40212, Zone: "eth0"}
+}
+
+// TestLinkLocalIPv6 tests whether IPv6 link-local addresses are put without the zone (e.g. "%eth0")
+// in the counters.
+func TestLinkLocalIPv6(t *testing.T) {
+	mockCounter, fs := createMocks()
+
+	// Serve a few DNS queries:
+	testdomains := []string{"eviltracker.com", "example.org"}
+	for _, domain := range testdomains {
+		ctx := metadata.ContextWithMetadata(context.Background())
+		r := new(dns.Msg)
+		r.SetQuestion(domain, dns.TypeA)
+		rec := dnstest.NewRecorder(&ResponseWriter6LinkLocal{})
+		rcode, err := fs.ServeDNS(ctx, rec, r)
+		if rcode != dns.RcodeSuccess || err != nil {
+			t.Errorf("Expected success without error, got code %d, error %v", rcode, err)
+		}
+	}
+	// Check collected stats:
+	expected := map[string]int{
+		"dns_stats:YYYYMMDDhhmm:fe80__42_ff_feca_4c65:blocked_queries:42": 1,
+		"dns_stats:YYYYMMDDhhmm:fe80__42_ff_feca_4c65:queries":            2,
+		"stats_total:dns:blocked_queries:42":                              1,
+		"stats_total:dns:queries":                                         2,
 	}
 	if !maps.Equal(mockCounter.counts, expected) {
 		t.Errorf("Expected counts:\n%v, but got:\n%v", expected, mockCounter.counts)
