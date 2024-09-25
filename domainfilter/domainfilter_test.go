@@ -23,6 +23,8 @@ import (
 	"net"
 	"testing"
 
+	"github.com/coredns/coredns/plugin/metadata"
+
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
@@ -97,25 +99,26 @@ func TestServeDNS(t *testing.T) {
 		expectedError         error
 		expectedMsgRcode      int // -1 means: no response DNS message expected
 		expectedMsgIPs        []net.IP
+		expectedListID        string
 	}{
 		// Domain passes:
-		{"deny", domain, dns.TypeA, "ERR\n", true, filterRequest, dns.RcodeSuccess, nil, -1, nil},
-		{"deny", domain, dns.TypeAAAA, "ERR\n", true, filterRequest, dns.RcodeSuccess, nil, -1, nil},
+		{"deny", domain, dns.TypeA, "ERR\n", true, filterRequest, dns.RcodeSuccess, nil, -1, nil, ""},
+		{"deny", domain, dns.TypeAAAA, "ERR\n", true, filterRequest, dns.RcodeSuccess, nil, -1, nil, ""},
 
 		// Domain is blocked:
-		{"deny", domain, dns.TypeA, "OK message=,,,,1.2.3.4\n", false, filterRequest, dns.RcodeSuccess, nil, dns.RcodeSuccess, []net.IP{net.ParseIP("1.2.3.4")}},
-		{"deny", domain, dns.TypeAAAA, "OK message=,,,,1.2.3.4\n", false, filterRequest, dns.RcodeSuccess, nil, dns.RcodeSuccess, []net.IP{}},
+		{"deny", domain, dns.TypeA, "OK message=,42,,,1.2.3.4\n", false, filterRequest, dns.RcodeSuccess, nil, dns.RcodeSuccess, []net.IP{net.ParseIP("1.2.3.4")}, "42"},
+		{"deny", domain, dns.TypeAAAA, "OK message=,42,,,1.2.3.4\n", false, filterRequest, dns.RcodeSuccess, nil, dns.RcodeSuccess, []net.IP{}, "42"},
 
 		// Filter service error, denied by default:
-		{"deny", domain, dns.TypeA, "BH\n", false, filterRequest, dns.RcodeServerFailure, nil, -1, nil},
+		{"deny", domain, dns.TypeA, "BH\n", false, filterRequest, dns.RcodeServerFailure, nil, -1, nil, ""},
 
 		// Filter service error, allowed by default:
-		{"allow", domain, dns.TypeA, "BH\n", true, filterRequest, dns.RcodeSuccess, nil, -1, nil},
+		{"allow", domain, dns.TypeA, "BH\n", true, filterRequest, dns.RcodeSuccess, nil, -1, nil, ""},
 	}
 	for i, tt := range tests {
 		testname := fmt.Sprintf("TestServeDNS#%d", i)
 		t.Run(testname, func(t *testing.T) {
-			ctx := context.TODO()
+			ctx := metadata.ContextWithMetadata(context.Background())
 			serverAddr := startMockFilterServer(tt.expectedFilterRequest, tt.filterResponse)
 			mockNext := &MockNext{}
 			df := NewDomainFilter(mockNext, serverAddr, tt.actionOnError)
@@ -135,6 +138,9 @@ func TestServeDNS(t *testing.T) {
 			if tt.expectedMsgRcode == -1 && rec.Msg != nil {
 				t.Errorf("Got an unexpected response message: %v", rec.Msg)
 			}
+			if tt.expectedMsgRcode != -1 && rec.Msg == nil {
+				t.Fatalf("Expected DNS response message with code %d, but no response message was written", tt.expectedMsgRcode)
+			}
 			if tt.expectedMsgRcode != -1 && tt.expectedMsgRcode != rec.Msg.Rcode {
 				t.Errorf("Expected DNS response message with code %d, but got: %d", tt.expectedMsgRcode, rec.Msg.Rcode)
 			}
@@ -148,6 +154,16 @@ func TestServeDNS(t *testing.T) {
 					if !gotIP.Equal(expectedIP) {
 						t.Errorf("Expected IP %v but got %v", expectedIP, gotIP)
 					}
+				}
+			}
+			if tt.expectedListID != "" {
+				key := "domainfilter/blockedbylist"
+				vf := metadata.ValueFunc(ctx, key)
+				if vf == nil {
+					t.Fatalf("Metadata %s is missing", key)
+				}
+				if vf() != tt.expectedListID {
+					t.Errorf("Expected metadata %s to be %s, but got: %s", key, tt.expectedListID, vf())
 				}
 			}
 		})
