@@ -9,9 +9,11 @@ Wants=redis-server.service
 [Service]
 User=eblocker-dns
 Group=eblocker-dns
-WorkingDirectory=/opt/eblocker-coredns
 ExecStart=/opt/eblocker-coredns/bin/eblocker-coredns
 ExecReload=/bin/kill -SIGUSR1 $MAINPID
+WorkingDirectory=/run/eblocker-coredns
+RuntimeDirectory=eblocker-coredns
+RuntimeDirectoryPreserve=yes
 Restart=on-failure
 
 [Install]
