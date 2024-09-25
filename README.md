@@ -28,3 +28,14 @@ Included plugins:
 * [filterstats](filterstats) counts blocked domains;
 * [resolverstats](resolverstats) collects response times of upstream
   servers.
+
+## Build Debian package
+
+Build a Debian package for architecture `armhf`:
+
+    ARCH=armhf make package
+
+Also supported:
+
+* `arm64`
+* `amd64`
