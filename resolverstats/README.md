@@ -27,7 +27,7 @@ The state `invalid` is currently not supported.
 
 Note that errors and timeouts are hidden if at least one of the
 configured upstream DNS servers is working. The *forward* plugin
-detects and avoid non-responsive servers automatically.
+detects and avoids non-responsive servers automatically.
 
 The last 25000 events are stored under the Redis key:
 
