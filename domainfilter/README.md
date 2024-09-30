@@ -15,7 +15,7 @@ the client.
 If the domain is not blocked, the request is passed to the next plugin
 in the chain.
 
-It the ICAP server's domain filter returns an error, the blocking
+If the ICAP server's domain filter returns an error, the blocking
 behaviour depends on the configured default action:
 
 * `allow` passes the request to the next plugin
