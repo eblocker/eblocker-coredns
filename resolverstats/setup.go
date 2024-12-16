@@ -37,7 +37,12 @@ func setup(c *caddy.Controller) error {
 	}
 	resolverName := args[0]
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		return NewResolverStats(next, resolverName)
+		stats := NewResolverStats(next, resolverName)
+		c.OnShutdown(func() error {
+			stats.eventLogger.stop()
+			return nil
+		})
+		return stats
 	})
 	return nil
 }

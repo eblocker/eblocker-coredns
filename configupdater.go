@@ -276,6 +276,7 @@ func writeCorefile(coreFile string, hostsFile string, dnsConfig DnsServerConfig)
 	fmt.Fprintf(file, "\thosts \"%s\" {\n\t\tfallthrough\n\t}\n", hostsFile)
 	if debugEnabled {
 		fmt.Fprintf(file, "\tlog\n")
+		fmt.Fprintf(file, "\tpprof\n")
 		fmt.Fprintf(file, "\tdebug\n")
 	}
 	fmt.Fprintf(file, "\terrors\n")

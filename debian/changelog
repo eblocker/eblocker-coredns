@@ -1,3 +1,9 @@
+eblocker-coredns (0.9-3) stable; urgency=low
+
+  * Fix issue [#5]: stop event logger in resolverstats plugin on shutdown.
+
+ -- eBlocker Open Source <dev@eblocker.org>  Mon, 16 Dec 2024 16:35:00 +0100
+
 eblocker-coredns (0.9-2) stable; urgency=low
 
   * Fix issue [#4]: count link-local IPv6 addresses without zone (e.g. "%eth0").
