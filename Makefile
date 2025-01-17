@@ -15,7 +15,7 @@ clean:
 	rm -f eblocker-coredns Corefile hosts
 
 eblocker-coredns: eblocker-coredns.go configupdater.go domainfilter/setup.go domainfilter/domainfilter.go resolverstats/setup.go resolverstats/resolverstats.go
-	GOARCH=$(GOARCH) go build
+	GOARCH=$(GOARCH) CGO_ENABLED=0 go build
 
 install: eblocker-coredns
 	mkdir -p $(DNS_HOME) $(DNS_HOME)/bin
