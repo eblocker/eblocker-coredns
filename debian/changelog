@@ -1,3 +1,50 @@
+eblocker-coredns (0.9-3+dns8) stable; urgency=medium
+
+  * Share compact upstream aggregator implementation for all DNS transports.
+
+ -- CalimerO78 <CalimerO78@users.noreply.github.com>  Sat, 21 Nov 2026 22:40:00 +0100
+
+eblocker-coredns (0.9-3+dns7) stable; urgency=medium
+
+  * Add independent multi-server plain DNSSEC upstream list.
+
+ -- CalimerO78 <CalimerO78@users.noreply.github.com>  Sat, 21 Nov 2026 22:10:00 +0100
+
+eblocker-coredns (0.9-3+dns6) stable; urgency=medium
+
+  * Correct IPv6 address formatting for DoT and DoH upstreams.
+
+ -- CalimerO78 <CalimerO78@users.noreply.github.com>  Sat, 21 Nov 2026 21:47:00 +0100
+
+eblocker-coredns (0.9-3+dns5) stable; urgency=medium
+
+  * Enable metadata on encrypted endpoint listeners for per-server statistics.
+
+ -- CalimerO78 <CalimerO78@users.noreply.github.com>  Sat, 21 Nov 2026 21:40:00 +0100
+
+eblocker-coredns (0.9-3+dns4) stable; urgency=medium
+
+  * Avoid duplicate errors plugin when importing encrypted resolver snippets.
+
+ -- CalimerO78 <CalimerO78@users.noreply.github.com>  Sat, 21 Nov 2026 21:31:00 +0100
+
+eblocker-coredns (0.9-3+dns3) stable; urgency=medium
+
+  * Add independent ordered multi-server DoT and DoH resolvers.
+  * Verify each upstream TLS name and expose per-server statistics.
+  * Preserve legacy secure DNS and existing plain resolver behavior.
+
+ -- CalimerO78 <CalimerO78@users.noreply.github.com>  Sat, 21 Nov 2026 21:20:00 +0100
+
+eblocker-coredns (0.9-3+dns2) stable; urgency=medium
+
+  * Add selectable DNS, DNS-over-TLS and DNS-over-HTTPS upstreams.
+  * Add optional local DNSSEC validation using Unbound.
+  * Use the Debian-provided root trust anchor exactly once.
+  * Preserve existing resolver configuration when secure DNS is not selected.
+
+ -- CalimerO78 <CalimerO78@users.noreply.github.com>  Sat, 21 Nov 2026 20:00:00 +0100
+
 eblocker-coredns (0.9-3) stable; urgency=low
 
   * Fix issue [#5]: stop event logger in resolverstats plugin on shutdown.

@@ -17,6 +17,7 @@
 package main
 
 import (
+	_ "github.com/coredns/coredns/plugin/bind"
 	_ "github.com/coredns/coredns/plugin/bufsize"
 	_ "github.com/coredns/coredns/plugin/cache"
 	_ "github.com/coredns/coredns/plugin/debug"
@@ -40,6 +41,7 @@ import (
 
 var directives = []string{
 	"metadata",
+	"bind",
 	"timeouts",
 	"bufsize",
 	"debug",
