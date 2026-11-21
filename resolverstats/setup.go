@@ -32,12 +32,12 @@ func init() {
 func setup(c *caddy.Controller) error {
 	c.Next() // 'resolverstats'
 	args := c.RemainingArgs()
-	if len(args) != 1 {
+	if len(args) < 1 || len(args) > 2 {
 		return plugin.Error("resolverstats", c.ArgErr())
 	}
 	resolverName := args[0]
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		stats := NewResolverStats(next, resolverName)
+		stats := NewResolverStats(next, resolverName, args[1:]...)
 		c.OnShutdown(func() error {
 			stats.eventLogger.stop()
 			return nil

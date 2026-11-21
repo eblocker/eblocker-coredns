@@ -44,10 +44,11 @@ var log = clog.NewWithPlugin("resolverstats")
 type ResolverStats struct {
 	Next        plugin.Handler
 	eventLogger EventLogger
+	serverLabel string
 }
 
 // Newresolverstats creates a resolverstats logging to the Redis database.
-func NewResolverStats(next plugin.Handler, resolverName string) *ResolverStats {
+func NewResolverStats(next plugin.Handler, resolverName string, serverLabel ...string) *ResolverStats {
 	stats := ResolverStats{
 		Next: next,
 		eventLogger: &BackgroundLogger{
@@ -59,6 +60,9 @@ func NewResolverStats(next plugin.Handler, resolverName string) *ResolverStats {
 				}),
 			},
 		},
+	}
+	if len(serverLabel) > 0 {
+		stats.serverLabel = serverLabel[0]
 	}
 	go stats.eventLogger.start(context.Background())
 	return &stats
@@ -110,7 +114,10 @@ func (stats *ResolverStats) ServeDNS(ctx context.Context, writer dns.ResponseWri
 	}
 	upstream := metadata.ValueFunc(ctx, "forward/upstream")
 	if upstream != nil {
-		resolver := strings.Split(upstream(), ":")[0] // separate IP and port. FIXME: this will fail with IPv6
+		resolver := stats.serverLabel
+		if resolver == "" {
+			resolver = strings.Split(upstream(), ":")[0]
+		} // legacy key format
 		event := fmt.Sprintf("%f,%s,%s,%f", float64(time.Now().UnixMicro())/1e6, resolver, state, duration)
 		stats.eventLogger.append(event)
 	}

@@ -8,7 +8,7 @@ Homepage: https://github.com/eblocker/eblocker-coredns
 
 Package: eblocker-coredns
 Architecture: any
-Depends: redis-server
+Depends: redis-server, unbound, unbound-anchor
 Description: eBlocker DNS Server
 Provides: eblocker-dns
 Replaces: eblocker-dns

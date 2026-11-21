@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -84,6 +85,17 @@ type ResolverConfig struct {
 	NameServers []NameServer
 	Options     map[string]string
 }
+type SecureDnsConfig struct {
+	Transport      string
+	Provider       string
+	ValidateDnssec bool
+	DotServers     []string
+	DohServers     []string
+	PlainServers   []string
+	PlainMode      string
+	DotMode        string
+	DohMode        string
+}
 type LocalDnsRecord struct {
 	Name          string
 	Builtin       bool
@@ -96,6 +108,7 @@ type LocalDnsRecord struct {
 type DnsServerConfig struct {
 	DefaultResolver           string
 	ResolverConfigs           map[string]ResolverConfig
+	SecureDns                 *SecureDnsConfig
 	ResolverConfigNameByIp    map[string]string
 	LocalDnsRecords           []LocalDnsRecord
 	FilteredPeers             []string
@@ -263,8 +276,39 @@ type FilterConfig struct {
 	action       string // "pass" (no filter), "deny" (filter, deny on error), "allow" (filter, allow on error)
 }
 
+const (
+	secureDnsResolverPort = 5354 // Unbound validates DNSSEC on loopback.
+	secureDnsUpstreamPort = 5355 // CoreDNS forwards Unbound queries to the selected provider.
+)
+
 // writeCorefile writes the CoreDNS configuration file.
 func writeCorefile(coreFile string, hostsFile string, dnsConfig DnsServerConfig) error {
+	secureUpstreams, secureName, err := secureDnsUpstreams(dnsConfig.SecureDns)
+	mode := dnsConfig.DefaultResolver
+	var plainServers []netip.Addr
+	if mode == "secure" && dnsConfig.SecureDns != nil && len(dnsConfig.SecureDns.PlainServers) > 0 {
+		plainServers, err = parsePlainServers(dnsConfig.SecureDns.PlainServers)
+		if err != nil {
+			return err
+		}
+	}
+	if err != nil && mode == "secure" {
+		return err
+	}
+	if (mode == "secure" || mode == "dot" || mode == "doh") && dnsConfig.SecureDns == nil {
+		return fmt.Errorf("encrypted DNS resolver selected without configuration")
+	}
+	var encrypted []encryptedServer
+	if mode == "dot" || mode == "doh" {
+		raw := dnsConfig.SecureDns.DotServers
+		if mode == "doh" {
+			raw = dnsConfig.SecureDns.DohServers
+		}
+		encrypted, err = parseEncryptedServers(mode, raw)
+		if err != nil {
+			return err
+		}
+	}
 	file, err := os.OpenFile(coreFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		log.Errorf("Error opening file %s for writing: %v", coreFile, err)
@@ -286,8 +330,29 @@ func writeCorefile(coreFile string, hostsFile string, dnsConfig DnsServerConfig)
 	for name := range dnsConfig.ResolverConfigs {
 		resolverNames = append(resolverNames, name)
 	}
+	if mode == "secure" || mode == "dot" || mode == "doh" {
+		resolverNames = append(resolverNames, mode)
+	}
 	slices.Sort(resolverNames)
 	for _, name := range resolverNames {
+		if name == "dot" || name == "doh" {
+			if dnsConfig.SecureDns.ValidateDnssec {
+				fmt.Fprintf(file, "(resolver_%s) {\n\tforward . 127.0.0.1:%d {\n\t\tpolicy sequential\n\t}\n}\n", name, secureDnsResolverPort)
+			} else {
+				writeEncryptedAggregator(file, fmt.Sprintf("(resolver_%s)", name), name, len(encrypted), dnsConfig.SecureDns)
+			}
+			continue
+		}
+		if name == "secure" {
+			if dnsConfig.SecureDns.ValidateDnssec {
+				fmt.Fprintf(file, "(resolver_secure) {\n\tforward . 127.0.0.1:%d {\n\t\tpolicy sequential\n\t}\n\tresolverstats secure\n}\n", secureDnsResolverPort)
+			} else if len(plainServers) > 0 {
+				writePlainAggregator(file, "(resolver_secure)", plainServers, dnsConfig.SecureDns.PlainMode)
+			} else {
+				writeSecureForward(file, "(resolver_secure)", secureUpstreams, secureName, true)
+			}
+			continue
+		}
 		resolver := dnsConfig.ResolverConfigs[name]
 		fmt.Fprintf(file, "(resolver_%s) {\n\tforward .", name)
 		for _, server := range resolver.NameServers {
@@ -309,6 +374,22 @@ func writeCorefile(coreFile string, hostsFile string, dnsConfig DnsServerConfig)
 		}
 		fmt.Fprintf(file, "}\n")
 	}
+	if dnsConfig.SecureDns != nil && dnsConfig.SecureDns.ValidateDnssec {
+		if mode == "secure" {
+			if len(plainServers) > 0 {
+				writePlainAggregator(file, fmt.Sprintf(".:%d", secureDnsUpstreamPort), plainServers, dnsConfig.SecureDns.PlainMode)
+			} else {
+				writeSecureForward(file, fmt.Sprintf(".:%d", secureDnsUpstreamPort), secureUpstreams, secureName, false)
+			}
+		} else if mode == "dot" || mode == "doh" {
+			writeEncryptedAggregator(file, fmt.Sprintf(".:%d", secureDnsUpstreamPort), mode, len(encrypted), dnsConfig.SecureDns)
+		}
+	}
+	if mode == "dot" || mode == "doh" {
+		writeEncryptedListeners(file, mode, encrypted)
+	} else if mode == "secure" && len(plainServers) > 0 {
+		writePlainListeners(file, plainServers)
+	}
 	filterConfigs := getFilterConfigs(resolverNames, dnsConfig)
 	for _, cfg := range filterConfigs {
 		writeDnsServer(file, cfg)
@@ -319,6 +400,189 @@ func writeCorefile(coreFile string, hostsFile string, dnsConfig DnsServerConfig)
 	}
 	writeDnsServer(file, global)
 	return nil
+}
+
+type encryptedServer struct {
+	address string
+	name    string
+	label   string
+}
+
+func encryptedPort(mode string, index int) int {
+	if mode == "dot" {
+		return 5360 + index
+	}
+	return 5380 + index
+}
+
+// Validate before opening the Corefile, preserving the working configuration.
+func parseEncryptedServers(mode string, raw []string) ([]encryptedServer, error) {
+	if len(raw) == 0 || len(raw) > 15 {
+		return nil, fmt.Errorf("encrypted DNS list must contain 1 to 15 servers")
+	}
+	seen := make(map[string]bool)
+	servers := make([]encryptedServer, 0, len(raw))
+	for _, entry := range raw {
+		parts := strings.Split(entry, "|")
+		if len(parts) != 2 || len(parts[1]) == 0 || len(parts[1]) > 253 || strings.ContainsAny(entry, " \t\n\r,{}") {
+			return nil, fmt.Errorf("invalid encrypted DNS entry %q", entry)
+		}
+		name := parts[1]
+		for _, label := range strings.Split(name, ".") {
+			if len(label) == 0 || len(label) > 63 {
+				return nil, fmt.Errorf("invalid TLS name %q", name)
+			}
+			for _, c := range label {
+				if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-') {
+					return nil, fmt.Errorf("invalid TLS name %q", name)
+				}
+			}
+		}
+		var address string
+		if mode == "dot" {
+			ip, err := netip.ParseAddr(parts[0])
+			if err != nil || !ip.IsValid() {
+				return nil, fmt.Errorf("invalid DoT IP %q", parts[0])
+			}
+			address = "tls://" + ip.String()
+			if ip.Is6() {
+				address = "tls://[" + ip.String() + "]"
+			}
+		} else {
+			u, err := url.Parse(parts[0])
+			if err != nil || u.Scheme != "https" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "/dns-query" || u.Port() != "" {
+				return nil, fmt.Errorf("invalid DoH URL %q", parts[0])
+			}
+			if _, err := netip.ParseAddr(u.Hostname()); err != nil {
+				return nil, fmt.Errorf("invalid DoH IP %q", u.Hostname())
+			}
+			address = "https://" + u.Host
+		}
+		if seen[entry] {
+			return nil, fmt.Errorf("duplicate encrypted DNS entry %q", entry)
+		}
+		seen[entry] = true
+		servers = append(servers, encryptedServer{address, name, entry})
+	}
+	return servers, nil
+}
+
+func parsePlainServers(raw []string) ([]netip.Addr, error) {
+	if len(raw) == 0 || len(raw) > 15 {
+		return nil, fmt.Errorf("plain DNSSEC list must contain 1 to 15 servers")
+	}
+	seen := make(map[string]bool)
+	servers := make([]netip.Addr, 0, len(raw))
+	for _, entry := range raw {
+		ip, err := netip.ParseAddr(entry)
+		if err != nil || ip.Zone() != "" || seen[ip.String()] {
+			return nil, fmt.Errorf("invalid or duplicate plain DNSSEC server %q", entry)
+		}
+		seen[ip.String()] = true
+		servers = append(servers, ip)
+	}
+	return servers, nil
+}
+
+func writePlainAggregator(file *os.File, block string, servers []netip.Addr, strategy string) {
+	writeAggregator(file, block, 5400, len(servers), strategy)
+}
+
+func writePlainListeners(file *os.File, servers []netip.Addr) {
+	for i, ip := range servers {
+		upstream := netip.AddrPortFrom(ip, 53).String()
+		fmt.Fprintf(file, ".:%d {\n\tbind 127.0.0.1\n\tmetadata\n\tforward . %s {\n\t\tpolicy sequential\n\t}\n\tresolverstats secure %s\n\terrors\n}\n", 5400+i, upstream, ip.String())
+	}
+}
+
+func writeEncryptedAggregator(file *os.File, block, mode string, count int, config *SecureDnsConfig) {
+	strategy := config.DotMode
+	if mode == "doh" {
+		strategy = config.DohMode
+	}
+	writeAggregator(file, block, encryptedPort(mode, 0), count, strategy)
+}
+
+func writeAggregator(file *os.File, block string, firstPort, count int, strategy string) {
+	loopback := strings.HasPrefix(block, ".:")
+	fmt.Fprintf(file, "%s {\n", block)
+	if loopback {
+		fmt.Fprint(file, "\tbind 127.0.0.1\n")
+	}
+	fmt.Fprint(file, "\tforward .")
+	for i := 0; i < count; i++ {
+		fmt.Fprintf(file, " 127.0.0.1:%d", firstPort+i)
+	}
+	if strategy != "round_robin" && strategy != "random" {
+		strategy = "sequential"
+	}
+	fmt.Fprintf(file, " {\n\t\tpolicy %s\n\t}\n", strategy)
+	if loopback {
+		fmt.Fprint(file, "\terrors\n")
+	}
+	fmt.Fprint(file, "}\n")
+}
+
+func writeEncryptedListeners(file *os.File, mode string, servers []encryptedServer) {
+	for index, server := range servers {
+		fmt.Fprintf(file, ".:%d {\n\tbind 127.0.0.1\n\tmetadata\n\tforward . %s {\n\t\tpolicy sequential\n\t\ttls_servername %s\n\t}\n\tresolverstats %s %s\n\terrors\n}\n",
+			encryptedPort(mode, index), server.address, server.name, mode, server.label)
+	}
+}
+
+// secureDnsUpstreams only accepts fixed provider profiles. This prevents a
+// malformed or unauthenticated endpoint from entering a generated Corefile.
+func secureDnsUpstreams(config *SecureDnsConfig) ([]string, string, error) {
+	if config == nil {
+		return nil, "", nil
+	}
+	var addresses []string
+	var serverName string
+	switch config.Provider {
+	case "cloudflare":
+		addresses = []string{"1.1.1.1", "1.0.0.1"}
+		serverName = "cloudflare-dns.com"
+	case "quad9":
+		addresses = []string{"9.9.9.9", "149.112.112.112"}
+		serverName = "dns.quad9.net"
+	default:
+		return nil, "", fmt.Errorf("unsupported secure DNS provider: %q", config.Provider)
+	}
+	var prefix, suffix string
+	switch config.Transport {
+	case "plain":
+		suffix = ":53"
+		serverName = ""
+	case "dot":
+		prefix = "tls://"
+	case "doh":
+		prefix = "https://"
+	default:
+		return nil, "", fmt.Errorf("unsupported secure DNS transport: %q", config.Transport)
+	}
+	upstreams := make([]string, 0, len(addresses))
+	for _, address := range addresses {
+		upstreams = append(upstreams, prefix+address+suffix)
+	}
+	return upstreams, serverName, nil
+}
+
+func writeSecureForward(file *os.File, serverBlock string, upstreams []string, serverName string, stats bool) {
+	fmt.Fprintf(file, "%s {\n", serverBlock)
+	if serverBlock == fmt.Sprintf(".:%d", secureDnsUpstreamPort) {
+		fmt.Fprint(file, "\tbind 127.0.0.1\n")
+	}
+	fmt.Fprintf(file, "\tforward . %s {\n\t\tpolicy sequential\n", strings.Join(upstreams, " "))
+	if serverName != "" {
+		fmt.Fprintf(file, "\t\ttls_servername %s\n", serverName)
+	}
+	fmt.Fprint(file, "\t}\n")
+	if stats {
+		fmt.Fprint(file, "\tresolverstats secure\n")
+	} else {
+		fmt.Fprint(file, "\terrors\n")
+	}
+	fmt.Fprint(file, "}\n")
 }
 
 func getFilterConfigs(resolverNames []string, dnsConfig DnsServerConfig) []FilterConfig {

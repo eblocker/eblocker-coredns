@@ -5,6 +5,9 @@ set -e
 if [ "$1" = configure ] ; then
     echo configure
 
+    # Apply the packaged loopback-only DNSSEC validator configuration.
+    systemctl restart unbound
+
     # Install services:
     systemctl enable eblocker-coredns
 
